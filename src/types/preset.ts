@@ -14,6 +14,7 @@ export interface PresetCreate {
   name: string;
   description?: string | null;
   effects_chain: PedalSchema[];
+  client_id?: string | null;
 }
 
 export interface PresetOut {
@@ -23,4 +24,5 @@ export interface PresetOut {
   effects_chain: PedalSchema[];
   user_id: number;
   created_at: string;
+  client_id?: string | null;
 }

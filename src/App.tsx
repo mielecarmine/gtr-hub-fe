@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { usePedalStore } from './store/usePedalStore';
 import { useAuthStore } from './store/useAuthStore';
@@ -7,6 +7,8 @@ import { TopBar } from './components/layout/TopBar';
 import { PedalLibrary } from './features/pedalboard/components/PedalLibrary';
 import { ActiveChain } from './features/pedalboard/components/ActiveChain';
 import { SavePresetModal } from './features/pedalboard/components/SavePresetModal';
+import { PresetsList } from './features/pedalboard/components/PresetsList';
+import { syncPendingPresets, syncRemotePresetsToLocal } from './api/presets';
 import { AuthPage } from './pages/AuthPage';
 
 function MainApp() {
@@ -23,10 +25,24 @@ function MainApp() {
     saveCurrentPreset,
     resetStatus,
     setInvalidChainForTesting,
+    loadPresets,
   } = usePedalStore();
 
   const { status: backendStatus, recheck: recheckBackend } = useBackendHealth();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Carica i preset all'avvio e sincronizza da remoto verso locale
+  useEffect(() => {
+    void loadPresets();
+    void syncRemotePresetsToLocal();
+  }, [loadPresets]);
+
+  // Esegue il sync in background dei preset pending non appena il backend torna online
+  useEffect(() => {
+    if (backendStatus === 'online') {
+      void syncPendingPresets();
+    }
+  }, [backendStatus]);
 
   const handleSaveModalOpen = () => {
     resetStatus();
@@ -61,12 +77,15 @@ function MainApp() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-8">
-        <PedalLibrary 
-          onAddPedal={addPedal}
-          onClearChain={clearChain}
-          onGenerateError={setInvalidChainForTesting}
-          hasActivePedals={effectsChain.length > 0}
-        />
+        <div className="w-full lg:w-72 flex flex-col gap-6 shrink-0">
+          <PedalLibrary 
+            onAddPedal={addPedal}
+            onClearChain={clearChain}
+            onGenerateError={setInvalidChainForTesting}
+            hasActivePedals={effectsChain.length > 0}
+          />
+          <PresetsList />
+        </div>
         <ActiveChain 
           chain={effectsChain}
           onToggleBypass={toggleBypass}

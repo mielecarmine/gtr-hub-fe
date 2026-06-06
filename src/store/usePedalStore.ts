@@ -1,12 +1,18 @@
 import { create } from 'zustand';
-import type { PedalSchema, PedalType, PedalParamValue, PresetCreate } from '../types/preset';
-import { createPreset } from '../api/presets';
+import type { PedalSchema, PedalType, PedalParamValue } from '../types/preset';
+import { db, type LocalPreset } from '../lib/db';
+import { useAuthStore } from './useAuthStore';
+import { deletePresetRemote, syncPendingPresets } from '../api/presets';
 
 interface PedalStoreState {
   effectsChain: PedalSchema[];
   isSaving: boolean;
   saveError: string | null;
   saveSuccess: boolean;
+  
+  // Offline-First Presets state
+  presets: LocalPreset[];
+  isLoadingPresets: boolean;
   
   // Actions
   addPedal: (type: PedalType) => void;
@@ -16,6 +22,11 @@ interface PedalStoreState {
   clearChain: () => void;
   saveCurrentPreset: (name: string, description?: string) => Promise<void>;
   resetStatus: () => void;
+  
+  // Offline-First Preset actions
+  loadPresets: () => Promise<void>;
+  deletePreset: (clientId: string) => Promise<void>;
+  loadPresetToChain: (clientId: string) => void;
   
   // Metodo helper di test per inserire volutamente un payload non valido
   setInvalidChainForTesting: () => void;
@@ -106,26 +117,91 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
     set({ effectsChain: [invalidPedal], saveSuccess: false, saveError: null });
   },
 
+  presets: [],
+  isLoadingPresets: false,
+
+  loadPresets: async () => {
+    const user = useAuthStore.getState().user;
+    if (!user) {
+      set({ presets: [] });
+      return;
+    }
+    set({ isLoadingPresets: true });
+    try {
+      const presets = await db.presets.where('user_id').equals(user.id).reverse().toArray();
+      set({ presets, isLoadingPresets: false });
+    } catch (err) {
+      console.error('Failed to load local presets:', err);
+      set({ isLoadingPresets: false });
+    }
+  },
+
+  deletePreset: async (clientId) => {
+    const preset = await db.presets.get(clientId);
+    if (!preset) return;
+
+    // Cancella localmente
+    await db.presets.delete(clientId);
+    
+    // Aggiorna lo store
+    await get().loadPresets();
+
+    // Se sincronizzato ed online, prova a cancellare da remoto in background
+    if (preset.sync_status === 'synced' && preset.remote_id) {
+      try {
+        await deletePresetRemote(preset.remote_id);
+      } catch (err) {
+        console.error('Failed to delete remote preset:', err);
+      }
+    }
+  },
+
+  loadPresetToChain: (clientId) => {
+    const preset = get().presets.find((p) => p.client_id === clientId);
+    if (preset) {
+      set({ effectsChain: [...preset.effects_chain], saveSuccess: false, saveError: null });
+    }
+  },
+
   saveCurrentPreset: async (name: string, description?: string) => {
+    const user = useAuthStore.getState().user;
+    if (!user) {
+      set({ saveError: 'Utente non autenticato' });
+      return;
+    }
+
     if (get().isSaving) return;
 
     set({ isSaving: true, saveError: null, saveSuccess: false });
 
     try {
-      const preset: PresetCreate = {
+      const client_id = crypto.randomUUID();
+      const newPreset: LocalPreset = {
+        client_id,
         name,
         description: description || null,
         effects_chain: get().effectsChain,
+        sync_status: 'pending',
+        remote_id: null,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
       };
 
-      await createPreset(preset);
+      // 1. Salva nel DB locale (IndexedDB)
+      await db.presets.add(newPreset);
+
+      // 2. Aggiorna lo stato in Zustand immediatamente per visualizzazione istantanea
+      await get().loadPresets();
 
       set({ isSaving: false, saveSuccess: true });
+
+      // 3. Esegui la sincronizzazione in background (senza bloccare la UI)
+      void syncPendingPresets();
     } catch (err: unknown) {
       const error = err as { message?: string };
       set({
         isSaving: false,
-        saveError: error.message || 'Si è verificato un errore durante la connessione al server',
+        saveError: error.message || 'Si è verificato un errore durante il salvataggio locale',
       });
       throw err;
     }

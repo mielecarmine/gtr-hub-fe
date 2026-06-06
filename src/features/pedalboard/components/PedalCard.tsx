@@ -75,7 +75,7 @@ export function PedalCard({ pedal, index, onToggleBypass, onRemove, onParamChang
             <div className="flex items-center justify-between text-xs">
               <span className="text-zinc-300 font-medium capitalize">{paramName}</span>
               <span className="text-zinc-100 font-mono">
-                {typeof val === 'boolean' ? (val ? 'ON' : 'OFF') : val}
+                {typeof val === 'boolean' ? (val ? 'ON' : 'OFF') : typeof val === 'object' && val !== null ? JSON.stringify(val) : val}
               </span>
             </div>
             
