@@ -6,10 +6,11 @@ interface ActiveChainProps {
   chain: PedalSchema[];
   onToggleBypass: (id: string) => void;
   onRemovePedal: (id: string) => void;
+  onMovePedal: (sourceIndex: number, destinationIndex: number) => void;
   onParamChange: (id: string, paramName: string, value: PedalParamValue) => void;
 }
 
-export function ActiveChain({ chain, onToggleBypass, onRemovePedal, onParamChange }: ActiveChainProps) {
+export function ActiveChain({ chain, onToggleBypass, onRemovePedal, onMovePedal, onParamChange }: ActiveChainProps) {
   return (
     <section className="flex-1 flex flex-col gap-6">
       <div className="bg-zinc-900/20 border border-zinc-800/40 rounded-2xl p-6 min-h-[400px] flex flex-col backdrop-blur-sm relative overflow-hidden">
@@ -47,8 +48,11 @@ export function ActiveChain({ chain, onToggleBypass, onRemovePedal, onParamChang
                 key={pedal.id}
                 pedal={pedal}
                 index={index}
+                isFirst={index === 0}
+                isLast={index === chain.length - 1}
                 onToggleBypass={onToggleBypass}
                 onRemove={onRemovePedal}
+                onMove={onMovePedal}
                 onParamChange={onParamChange}
               />
             ))}

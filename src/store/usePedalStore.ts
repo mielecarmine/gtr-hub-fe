@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
 import type { PedalSchema, PedalType, PedalParamValue } from '../types/preset';
 import { db, type LocalPreset } from '../lib/db';
 import { useAuthStore } from './useAuthStore';
@@ -15,8 +16,9 @@ interface PedalStoreState {
   isLoadingPresets: boolean;
   
   // Actions
-  addPedal: (type: PedalType) => void;
+  addPedal: (type: PedalType, insertAt?: number) => void;
   removePedal: (id: string) => void;
+  movePedal: (sourceIndex: number, destinationIndex: number) => void;
   updatePedalParam: (id: string, key: string, value: PedalParamValue) => void;
   toggleBypass: (id: string) => void;
   clearChain: () => void;
@@ -41,22 +43,37 @@ const DEFAULT_PARAMS: Record<PedalType, Record<string, PedalParamValue>> = {
   chorus: { rate: 1.5, depth: 50, mix: 40 },
 };
 
-export const usePedalStore = create<PedalStoreState>((set, get) => ({
+export const usePedalStore = create<PedalStoreState>()(
+  devtools(
+    (set, get) => ({
   effectsChain: [],
   isSaving: false,
   saveError: null,
   saveSuccess: false,
 
-  addPedal: (type) => {
+  addPedal: (type, insertAt) => {
     const chain = get().effectsChain;
     const newPedal: PedalSchema = {
       id: `${type}-${Date.now()}`,
       type,
-      order_index: chain.length,
+      order_index: 0,
       bypass: false,
       params: { ...DEFAULT_PARAMS[type] },
     };
-    set({ effectsChain: [...chain, newPedal], saveSuccess: false, saveError: null });
+
+    const newChain = [...chain];
+    if (insertAt !== undefined && insertAt >= 0 && insertAt <= newChain.length) {
+      newChain.splice(insertAt, 0, newPedal);
+    } else {
+      newChain.push(newPedal);
+    }
+
+    const reindexed = newChain.map((pedal, index) => ({
+      ...pedal,
+      order_index: index,
+    }));
+
+    set({ effectsChain: reindexed, saveSuccess: false, saveError: null }, false, 'pedal/addPedal');
   },
 
   removePedal: (id) => {
@@ -67,7 +84,29 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
       ...pedal,
       order_index: index,
     }));
-    set({ effectsChain: reindexed, saveSuccess: false, saveError: null });
+    set({ effectsChain: reindexed, saveSuccess: false, saveError: null }, false, 'pedal/removePedal');
+  },
+
+  movePedal: (sourceIndex, destinationIndex) => {
+    const chain = get().effectsChain;
+    if (
+      sourceIndex < 0 || sourceIndex >= chain.length ||
+      destinationIndex < 0 || destinationIndex >= chain.length ||
+      sourceIndex === destinationIndex
+    ) {
+      return;
+    }
+
+    const newChain = [...chain];
+    const [movedPedal] = newChain.splice(sourceIndex, 1);
+    newChain.splice(destinationIndex, 0, movedPedal);
+
+    const reindexed = newChain.map((pedal, index) => ({
+      ...pedal,
+      order_index: index,
+    }));
+
+    set({ effectsChain: reindexed }, false, 'pedal/movePedal');
   },
 
   updatePedalParam: (id, key, value) => {
@@ -84,7 +123,7 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
       }
       return pedal;
     });
-    set({ effectsChain: updated });
+    set({ effectsChain: updated }, false, 'pedal/updatePedalParam');
   },
 
   toggleBypass: (id) => {
@@ -98,12 +137,12 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
       }
       return pedal;
     });
-    set({ effectsChain: updated });
+    set({ effectsChain: updated }, false, 'pedal/toggleBypass');
   },
 
-  clearChain: () => set({ effectsChain: [], saveSuccess: false, saveError: null }),
+  clearChain: () => set({ effectsChain: [], saveSuccess: false, saveError: null }, false, 'pedal/clearChain'),
 
-  resetStatus: () => set({ saveError: null, saveSuccess: false }),
+  resetStatus: () => set({ saveError: null, saveSuccess: false }, false, 'pedal/resetStatus'),
 
   setInvalidChainForTesting: () => {
     // Forza un pedale non valido per simulare l'errore 422 dal backend (es: tipo pedale non esistente 'flanger')
@@ -114,7 +153,7 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
       bypass: false,
       params: { depth: { nested: 'not allowed' } as unknown as PedalParamValue } // Struttura annidata non consentita
     };
-    set({ effectsChain: [invalidPedal], saveSuccess: false, saveError: null });
+    set({ effectsChain: [invalidPedal], saveSuccess: false, saveError: null }, false, 'pedal/setInvalidChainForTesting');
   },
 
   presets: [],
@@ -123,16 +162,16 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
   loadPresets: async () => {
     const user = useAuthStore.getState().user;
     if (!user) {
-      set({ presets: [] });
+      set({ presets: [] }, false, 'pedal/loadPresets/clear');
       return;
     }
-    set({ isLoadingPresets: true });
+    set({ isLoadingPresets: true }, false, 'pedal/loadPresets/start');
     try {
       const presets = await db.presets.where('user_id').equals(user.id).reverse().toArray();
-      set({ presets, isLoadingPresets: false });
+      set({ presets, isLoadingPresets: false }, false, 'pedal/loadPresets/success');
     } catch (err) {
       console.error('Failed to load local presets:', err);
-      set({ isLoadingPresets: false });
+      set({ isLoadingPresets: false }, false, 'pedal/loadPresets/error');
     }
   },
 
@@ -159,20 +198,20 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
   loadPresetToChain: (clientId) => {
     const preset = get().presets.find((p) => p.client_id === clientId);
     if (preset) {
-      set({ effectsChain: [...preset.effects_chain], saveSuccess: false, saveError: null });
+      set({ effectsChain: [...preset.effects_chain], saveSuccess: false, saveError: null }, false, 'pedal/loadPresetToChain');
     }
   },
 
   saveCurrentPreset: async (name: string, description?: string) => {
     const user = useAuthStore.getState().user;
     if (!user) {
-      set({ saveError: 'Utente non autenticato' });
+      set({ saveError: 'Utente non autenticato' }, false, 'pedal/saveCurrentPreset/unauth');
       return;
     }
 
     if (get().isSaving) return;
 
-    set({ isSaving: true, saveError: null, saveSuccess: false });
+    set({ isSaving: true, saveError: null, saveSuccess: false }, false, 'pedal/saveCurrentPreset/start');
 
     try {
       const client_id = crypto.randomUUID();
@@ -193,7 +232,7 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
       // 2. Aggiorna lo stato in Zustand immediatamente per visualizzazione istantanea
       await get().loadPresets();
 
-      set({ isSaving: false, saveSuccess: true });
+      set({ isSaving: false, saveSuccess: true }, false, 'pedal/saveCurrentPreset/success');
 
       // 3. Esegui la sincronizzazione in background (senza bloccare la UI)
       void syncPendingPresets();
@@ -202,8 +241,11 @@ export const usePedalStore = create<PedalStoreState>((set, get) => ({
       set({
         isSaving: false,
         saveError: error.message || 'Si è verificato un errore durante il salvataggio locale',
-      });
+      }, false, 'pedal/saveCurrentPreset/error');
       throw err;
     }
   },
-}));
+  }),
+  { name: 'PedalStore' }
+)
+);

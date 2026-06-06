@@ -19,6 +19,7 @@ function MainApp() {
     saveSuccess,
     addPedal,
     removePedal,
+    movePedal,
     updatePedalParam,
     toggleBypass,
     clearChain,
@@ -90,6 +91,7 @@ function MainApp() {
           chain={effectsChain}
           onToggleBypass={toggleBypass}
           onRemovePedal={removePedal}
+          onMovePedal={movePedal}
           onParamChange={updatePedalParam}
         />
       </main>

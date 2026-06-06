@@ -1,11 +1,14 @@
-import { Trash2 } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PedalSchema, PedalType, PedalParamValue } from '@/types/preset';
 
 interface PedalCardProps {
   pedal: PedalSchema;
   index: number;
+  isFirst: boolean;
+  isLast: boolean;
   onToggleBypass: (id: string) => void;
   onRemove: (id: string) => void;
+  onMove: (sourceIndex: number, destinationIndex: number) => void;
   onParamChange: (id: string, paramName: string, value: PedalParamValue) => void;
 }
 
@@ -26,7 +29,7 @@ const getPedalColor = (type: PedalType) => {
   }
 };
 
-export function PedalCard({ pedal, index, onToggleBypass, onRemove, onParamChange }: PedalCardProps) {
+export function PedalCard({ pedal, index, isFirst, isLast, onToggleBypass, onRemove, onMove, onParamChange }: PedalCardProps) {
   return (
     <div
       className={`relative rounded-xl border bg-zinc-950/80 p-5 flex flex-col justify-between transition-all duration-300 shadow-xl bg-gradient-to-tr ${
@@ -44,6 +47,30 @@ export function PedalCard({ pedal, index, onToggleBypass, onRemove, onParamChang
         </div>
         
         <div className="flex items-center gap-2">
+          {/* Move Left */}
+          {!isFirst && (
+            <button
+              onClick={() => onMove(index, index - 1)}
+              type="button"
+              className="p-1 rounded bg-black/20 border border-transparent text-zinc-400 hover:text-white hover:bg-black/40 transition-colors"
+              title="Sposta a sinistra"
+            >
+              <ChevronLeft className="size-3.5" />
+            </button>
+          )}
+
+          {/* Move Right */}
+          {!isLast && (
+            <button
+              onClick={() => onMove(index, index + 1)}
+              type="button"
+              className="p-1 rounded bg-black/20 border border-transparent text-zinc-400 hover:text-white hover:bg-black/40 transition-colors"
+              title="Sposta a destra"
+            >
+              <ChevronRight className="size-3.5" />
+            </button>
+          )}
+
           {/* Bypass button */}
           <button
             onClick={() => onToggleBypass(pedal.id)}
