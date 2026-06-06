@@ -72,7 +72,7 @@ export class DistortionNode extends BaseEffect<DistortionParams> {
       // Nota: usiamo "as any" o "as unknown as Float32Array" come workaround per l'errore di TS
       // in quanto TS 5.5+ considera i Float32Array come ArrayBufferLike (incluso SharedArrayBuffer)
       // ma il lib.dom.d.ts del Web Audio API si aspetta specificamente ArrayBuffer.
-      this.waveShaper.curve = this.makeDistortionCurve(this.currentAmount) as any;
+      this.waveShaper.curve = this.makeDistortionCurve(this.currentAmount);
     }
   }
 
@@ -83,11 +83,12 @@ export class DistortionNode extends BaseEffect<DistortionParams> {
    * @param amount Intensità (es. valori tra 10-100 per Drive udibile)
    * @returns Array Float32 con coefficienti di clipping.
    */
-  private makeDistortionCurve(amount: number): Float32Array {
+  private makeDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
     const k = typeof amount === 'number' ? amount : 50;
     // La risoluzione a 44.1kHz offre una curva morbida senza spreco di memoria aggiuntiva
     const SAMPLE_RATE = this.input.context.sampleRate || 44100;
-    const curve = new Float32Array(SAMPLE_RATE);
+    const buffer = new ArrayBuffer(SAMPLE_RATE * 4);
+    const curve = new Float32Array(buffer);
     const deg = Math.PI / 180;
 
     // Per iterazioni calde conviene evitare chiamate functione Math all'interno di un grosso array
