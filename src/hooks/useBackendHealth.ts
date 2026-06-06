@@ -8,26 +8,31 @@ export function useBackendHealth() {
 
   const checkBackend = useCallback(async () => {
     let active = true;
-    setStatus('checking');
-    try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-      const healthUrl = apiBase.endsWith('/api/v1') 
-        ? apiBase.replace('/api/v1', '/health') 
-        : `${apiBase}/health`;
-        
-      const res = await fetch(healthUrl);
-      if (active) {
-        if (res.ok) {
-          setStatus('online');
-        } else {
+    const check = async () => {
+      setStatus('checking');
+      try {
+        const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+        const healthUrl = apiBase.endsWith('/api/v1') 
+          ? apiBase.replace('/api/v1', '/health') 
+          : `${apiBase}/health`;
+          
+        const res = await fetch(healthUrl);
+        if (active) {
+          if (res.ok) {
+            setStatus('online');
+          } else {
+            setStatus('offline');
+          }
+        }
+      } catch {
+        if (active) {
           setStatus('offline');
         }
       }
-    } catch {
-      if (active) {
-        setStatus('offline');
-      }
-    }
+    };
+    
+    // Call asynchronously to avoid setting state synchronously in useEffect
+    void Promise.resolve().then(check);
     
     return () => { active = false; };
   }, []);

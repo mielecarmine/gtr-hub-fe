@@ -1,6 +1,8 @@
-import { Guitar, RefreshCw, Save } from 'lucide-react';
+import { Guitar, RefreshCw, Save, LogOut, User as UserIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { BackendStatus } from '@/hooks/useBackendHealth';
+import { useAuthStore } from '@/store/useAuthStore';
+import { authApi } from '@/api/auth';
 
 interface TopBarProps {
   backendStatus: BackendStatus;
@@ -10,6 +12,18 @@ interface TopBarProps {
 }
 
 export function TopBar({ backendStatus, onRecheckBackend, onSaveClick, canSave }: TopBarProps) {
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = async () => {
+    try {
+      await authApi.logout();
+    } catch (e) {
+      // Ignore errors on logout
+    } finally {
+      logout();
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-800/80 bg-[#09090b]/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -52,10 +66,26 @@ export function TopBar({ backendStatus, onRecheckBackend, onSaveClick, canSave }
             )}
           </button>
 
+          {user && (
+            <div className="flex items-center gap-2 pl-4 border-l border-zinc-800">
+              <div className="flex items-center gap-1.5 text-zinc-400 text-sm">
+                <UserIcon size={14} />
+                <span>{user.username}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="text-zinc-500 hover:text-red-400 p-1.5 rounded-md hover:bg-red-500/10 transition-colors"
+                title="Logout"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
+
           <Button 
             onClick={onSaveClick}
-            disabled={!canSave}
-            className="relative overflow-hidden group/btn bg-gradient-to-r from-red-650 to-amber-600 hover:from-red-600 hover:to-amber-650 text-white font-medium border-0 shadow-lg shadow-red-650/15 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={!canSave || !user}
+            className="relative overflow-hidden group/btn bg-gradient-to-r from-red-650 to-amber-600 hover:from-red-600 hover:to-amber-650 text-white font-medium border-0 shadow-lg shadow-red-650/15 transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed ml-2"
           >
             <Save className="size-4 mr-2 group-hover/btn:scale-110 transition-transform" />
             Salva Preset

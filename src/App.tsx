@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { usePedalStore } from './store/usePedalStore';
+import { useAuthStore } from './store/useAuthStore';
 import { useBackendHealth } from './hooks/useBackendHealth';
 import { TopBar } from './components/layout/TopBar';
 import { PedalLibrary } from './features/pedalboard/components/PedalLibrary';
 import { ActiveChain } from './features/pedalboard/components/ActiveChain';
 import { SavePresetModal } from './features/pedalboard/components/SavePresetModal';
+import { AuthPage } from './pages/AuthPage';
 
-export default function App() {
+function MainApp() {
   const {
     effectsChain,
     isSaving,
@@ -73,6 +76,7 @@ export default function App() {
       </main>
 
       <SavePresetModal 
+        key={isModalOpen ? 'open' : 'closed'}
         isOpen={isModalOpen}
         onClose={handleModalClose}
         onSave={handleSavePreset}
@@ -81,5 +85,27 @@ export default function App() {
         saveError={saveError}
       />
     </div>
+  );
+}
+
+export default function App() {
+  const { isAuthenticated } = useAuthStore();
+
+  return (
+    <Routes>
+      <Route 
+        path="/" 
+        element={
+          isAuthenticated ? <MainApp /> : <Navigate to="/auth" replace />
+        } 
+      />
+      <Route 
+        path="/auth" 
+        element={
+          !isAuthenticated ? <AuthPage /> : <Navigate to="/" replace />
+        } 
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }

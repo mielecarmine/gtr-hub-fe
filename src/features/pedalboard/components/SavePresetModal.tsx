@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, Save, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -22,13 +22,7 @@ export function SavePresetModal({
   const [presetName, setPresetName] = useState('');
   const [presetDesc, setPresetDesc] = useState('');
 
-  // Reset form when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setPresetName('');
-      setPresetDesc('');
-    }
-  }, [isOpen]);
+  // State is reset by remounting the component using a key in App.tsx
 
   if (!isOpen) return null;
 
